@@ -22,22 +22,28 @@
 #include <boost/thread/thread.hpp>
 #include <boost/thread/mutex.hpp>
 
-#include <gazebo/gazebo.hh>
-#include <gazebo/physics/physics.hh>
-#include <gazebo/common/common.hh>
+#include <gazebo-11/gazebo/gazebo.hh>
+#include <gazebo-11/gazebo/physics/physics.hh>
+#include <gazebo-11/gazebo/physics/Model.hh>
+#include <gazebo-11/gazebo/physics/World.hh>
+#include <gazebo-11/gazebo/physics/Link.hh>
+#include <gazebo-11/gazebo/common/common.hh>
 #include <stdio.h>
 #include <iostream>
 #include <algorithm>
 
 #include <boost/shared_ptr.hpp>
-#include <gazebo/transport/transport.hh>
-#include <gazebo/transport/Node.hh>
-#include <gazebo/transport/TransportIface.hh>
+#include <gazebo-11/gazebo/transport/transport.hh>
+#include <gazebo-11/gazebo/transport/Node.hh>
+#include <gazebo-11/gazebo/transport/TransportIface.hh>
 
 #include <ros/ros.h>
 #include <std_msgs/UInt32MultiArray.h>
 #include <geometry_msgs/Twist.h>
 #include <geometry_msgs/Pose.h>
+
+#include <ignition/math6/gz/math/Vector3.hh>
+#include <ignition/math6/gz/math/Pose3.hh>
 
 #define DEFAULT_OPEN_VEL -1.57
 #define DEFAULT_CLOSE_VEL 1.57
@@ -55,30 +61,33 @@
 #define CONTEXT_SPACE_Y_RANGE 2.0
 #define CONTEXT_SPACE_Z_RANGE 2.0
 
-
 namespace gazebo
-{ 
-  enum DoorType {FLIP, SLIDE};
+{
+  enum DoorType
+  {
+    FLIP,
+    SLIDE
+  };
 
   class DoorPlugin : public ModelPlugin
   {
 
   private:
-    physics::ModelPtr model;
-    physics::LinkPtr doorLink;
-    math::Pose currPose, currFpvPose; 
-
-    math::Vector3 cmd_vel;
+    gazebo::physics::ModelPtr model;
+    gazebo::physics::LinkPtr doorLink;
+    ignition::math::Pose3d currPose;
+    ignition::math::Pose3d currFpvPose;
+    ignition::math::Vector3d cmd_vel;
 
     bool isActive;
     int activeDoors[100];
     DoorType type;
-    
+
     int door_ref_num;
     std::string door_type, door_model_name, door_direction, model_domain_space;
     float max_trans_dist, maxPosX, maxPosY, minPosX, minPosY;
 
-    ros::NodeHandle* rosNode;
+    ros::NodeHandle *rosNode;
     transport::NodePtr gazeboNode;
     event::ConnectionPtr updateConnection;
 
@@ -91,7 +100,6 @@ namespace gazebo
       std::string name = "door_plugin_node";
       int argc = 0;
       ros::init(argc, NULL, name);
-
     }
     ~DoorPlugin()
     {
@@ -118,31 +126,43 @@ namespace gazebo
   private:
     void determineDoorType(sdf::ElementPtr _sdf)
     {
-      if (!_sdf->HasElement("door_type")) {
+      if (!_sdf->HasElement("door_type"))
+      {
         ROS_WARN("Door Type not specified. Defaulting to 'flip'");
         door_type = "flip";
-      } else {
+      }
+      else
+      {
         door_type = _sdf->GetElement("door_type")->Get<std::string>();
       }
 
-      if (door_type.compare(TYPE_SLIDE_OPEN) == 0) {
+      if (door_type.compare(TYPE_SLIDE_OPEN) == 0)
+      {
         type = SLIDE;
-      } else {
+      }
+      else
+      {
         type = FLIP;
       }
     }
 
     void determineDoorDirection(sdf::ElementPtr _sdf)
     {
-      if (!_sdf->HasElement("door_direction")) {
-        if (type == FLIP) {
+      if (!_sdf->HasElement("door_direction"))
+      {
+        if (type == FLIP)
+        {
           ROS_WARN("Door direction not specified in the plugin reference. Defaulting to 'clockwise'");
           door_direction = DIRECTION_FLIP_CLOCKWISE;
-        } else if (type == SLIDE) {
+        }
+        else if (type == SLIDE)
+        {
           ROS_WARN("Door direction not specified in the plugin reference. Defaulting to 'left'");
           door_direction = DIRECTION_SLIDE_LEFT;
-        } 
-      } else {
+        }
+      }
+      else
+      {
         door_direction = _sdf->GetElement("door_direction")->Get<std::string>();
         checkDirectionValidity();
       }
@@ -150,11 +170,15 @@ namespace gazebo
 
     void determineConstraints(sdf::ElementPtr _sdf)
     {
-      if (type == SLIDE) {
-        if (!_sdf->HasElement("max_trans_dist")) {
+      if (type == SLIDE)
+      {
+        if (!_sdf->HasElement("max_trans_dist"))
+        {
           ROS_WARN("Max Translation Distance for sliding door not specified in the plugin reference. Defaulting to '0.711305' m");
           max_trans_dist = DEFAULT_SLIDE_DISTANCE;
-        } else {
+        }
+        else
+        {
           max_trans_dist = _sdf->GetElement("max_trans_dist")->Get<float>();
         }
       }
@@ -162,13 +186,18 @@ namespace gazebo
 
     void checkDirectionValidity()
     {
-      if (type == FLIP) {
-        if (door_direction.compare(DIRECTION_FLIP_CLOCKWISE) != 0 && door_direction.compare(DIRECTION_FLIP_COUNTER_CLOCKWISE) != 0) {
+      if (type == FLIP)
+      {
+        if (door_direction.compare(DIRECTION_FLIP_CLOCKWISE) != 0 && door_direction.compare(DIRECTION_FLIP_COUNTER_CLOCKWISE) != 0)
+        {
           ROS_WARN("Invalid door direction specified. Only two states possible: 'clockwise' OR 'counter_clockwise'. Defaulting to 'clockwise'");
           door_direction = DIRECTION_FLIP_CLOCKWISE;
         }
-      } else if (type == SLIDE) {
-        if (door_direction.compare(DIRECTION_SLIDE_LEFT) != 0 && door_direction.compare(DIRECTION_SLIDE_RIGHT) != 0) {
+      }
+      else if (type == SLIDE)
+      {
+        if (door_direction.compare(DIRECTION_SLIDE_LEFT) != 0 && door_direction.compare(DIRECTION_SLIDE_RIGHT) != 0)
+        {
           ROS_WARN("Invalid door direction specified. Only two states possible: 'left' OR 'right'. Defaulting to 'left'");
           door_direction = DIRECTION_SLIDE_LEFT;
         }
@@ -177,10 +206,13 @@ namespace gazebo
 
     void determineModelDomain(sdf::ElementPtr _sdf)
     {
-      if (!_sdf->HasElement("model_domain_space")) {
+      if (!_sdf->HasElement("model_domain_space"))
+      {
         ROS_WARN("Model Domain Space not specified in the plugin reference. Defaulting to 'door_'");
         model_domain_space = "door_";
-      } else {
+      }
+      else
+      {
         model_domain_space = _sdf->GetElement("model_domain_space")->Get<std::string>();
       }
 
@@ -192,17 +224,18 @@ namespace gazebo
       isActive = false;
 
       // find the elevator reference number
-      std::string door_ref_num_str = door_model_name; 
+      std::string door_ref_num_str = door_model_name;
       replaceSubstring(door_ref_num_str, model_domain_space, "");
       door_ref_num = atoi(door_ref_num_str.c_str());
 
-      if (type == SLIDE) {
+      if (type == SLIDE)
+      {
         // compute slide constraints
-        float spawnPosX = model->GetWorldPose().pos.x;
+        float spawnPosX = model->WorldPose().Pos().X();
         minPosX = door_direction.compare(DIRECTION_SLIDE_RIGHT) == 0 ? spawnPosX - max_trans_dist : spawnPosX;
         maxPosX = door_direction.compare(DIRECTION_SLIDE_RIGHT) == 0 ? spawnPosX : spawnPosX + max_trans_dist;
 
-        float spawnPosY = model->GetWorldPose().pos.y;
+        float spawnPosY = model->WorldPose().Pos().Y();
         minPosY = door_direction.compare(DIRECTION_SLIDE_RIGHT) == 0 ? spawnPosY - max_trans_dist : spawnPosY;
         maxPosY = door_direction.compare(DIRECTION_SLIDE_RIGHT) == 0 ? spawnPosY : spawnPosY + max_trans_dist;
       }
@@ -216,19 +249,23 @@ namespace gazebo
 
       rosNode = new ros::NodeHandle("");
 
-      sub = rosNode->subscribe<geometry_msgs::Twist>("/door_controller/command", 1000, &DoorPlugin::cmd_ang_cb, this );
+      sub = rosNode->subscribe<geometry_msgs::Twist>("/door_controller/command", 1000, &DoorPlugin::cmd_ang_cb, this);
       sub_active = rosNode->subscribe<std_msgs::UInt32MultiArray>("/door_controller/active", 1000, &DoorPlugin::active_doors_cb, this);
 
       updateConnection = event::Events::ConnectWorldUpdateBegin(boost::bind(&DoorPlugin::OnUpdate, this));
     }
 
-    void cmd_ang_cb(const geometry_msgs::Twist::ConstPtr& msg)
+    void cmd_ang_cb(const geometry_msgs::Twist::ConstPtr &msg)
     {
-      if (isActive) {
-        if (type == FLIP) {
+      if (isActive)
+      {
+        if (type == FLIP)
+        {
           setAngularVel(msg->angular.z);
           ROS_INFO("Door '%s' - Angular z: [%f]", door_model_name.c_str(), msg->angular.z);
-        } else if (type == SLIDE) {
+        }
+        else if (type == SLIDE)
+        {
           setLinearVel(msg->linear.x, msg->linear.y);
           ROS_INFO("Door '%s' - Linear x: [%f], y: [%f]", door_model_name.c_str(), msg->linear.x, msg->linear.y);
         }
@@ -237,41 +274,55 @@ namespace gazebo
 
     void updateLinkVel()
     {
-      if (type == FLIP) {
-        doorLink->SetAngularVel(cmd_vel);
-      } else if (type == SLIDE) {
-        doorLink->SetLinearVel(cmd_vel);
+      if (type == FLIP)
+      {
+        doorLink->SetAngularVel(this->cmd_vel);
+      }
+      else if (type == SLIDE)
+      {
+        doorLink->SetLinearVel(this->cmd_vel);
       }
     }
 
     void applyConstraints()
     {
-      if (type == SLIDE) {
-        float currDoorPosX = model->GetWorldPose().pos.x;
-        float currDoorPosY = model->GetWorldPose().pos.y;
+      if (type == SLIDE)
+      {
+        float currDoorPosX = model->WorldPose().Pos().X();
+        float currDoorPosY = model->WorldPose().Pos().Y();
 
-        math::Pose constrainedPose;
+        ignition::math::Pose3 constrainedPose(0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
 
-        if (currDoorPosX > maxPosX) {
-          constrainedPose.pos.x = maxPosX;
-        } else if (currDoorPosX < minPosX) {
-          constrainedPose.pos.x = minPosX;
-        } else {
-          constrainedPose.pos.x = currDoorPosX;
+        if (currDoorPosX > maxPosX)
+        {
+          constrainedPose.Pos().X() = maxPosX;
+        }
+        else if (currDoorPosX < minPosX)
+        {
+          constrainedPose.Pos().X() = minPosX;
+        }
+        else
+        {
+          constrainedPose.Pos().X() = currDoorPosX;
         }
 
-        if (currDoorPosY > maxPosY) {
-          constrainedPose.pos.y = maxPosY;
-        } else if (currDoorPosY < minPosY) {
-          constrainedPose.pos.y = minPosY;
-        } else {
-          constrainedPose.pos.y = currDoorPosY;
+        if (currDoorPosY > maxPosY)
+        {
+          constrainedPose.Pos().Y() = maxPosY;
+        }
+        else if (currDoorPosY < minPosY)
+        {
+          constrainedPose.Pos().Y() = minPosY;
+        }
+        else
+        {
+          constrainedPose.Pos().Y() = currDoorPosY;
         }
 
-          constrainedPose.pos.z = model->GetWorldPose().pos.z;
-          constrainedPose.rot.x = model->GetWorldPose().rot.x;
-          constrainedPose.rot.y = model->GetWorldPose().rot.y;
-          constrainedPose.rot.z = model->GetWorldPose().rot.z;
+        constrainedPose.Pos().Z() = model->WorldPose().Pos().Z();
+        constrainedPose.Rot().X() = model->WorldPose().Rot().X();
+        constrainedPose.Rot().Y() = model->WorldPose().Rot().Y();
+        constrainedPose.Rot().Z() = model->WorldPose().Rot().Z();
 
         model->SetWorldPose(constrainedPose);
       }
@@ -279,39 +330,47 @@ namespace gazebo
 
     void setAngularVel(float rot_z)
     {
-      cmd_vel = math::Vector3();
+      this->cmd_vel = ignition::math::Vector3(0.0, 0.0, 0.0);
 
-      if (door_direction.compare(DIRECTION_FLIP_CLOCKWISE) == 0) { 
-        cmd_vel.z = rot_z;
-      } else {
-        cmd_vel.z = -rot_z; 
+      if (door_direction.compare(DIRECTION_FLIP_CLOCKWISE) == 0)
+      {
+        this->cmd_vel.Z() = rot_z;
+      }
+      else
+      {
+        this->cmd_vel.Z() = -rot_z;
       }
     }
 
-    void setLinearVel(float lin_x, float lin_y) 
+    void setLinearVel(float lin_x, float lin_y)
     {
-      cmd_vel = math::Vector3();
+      this->cmd_vel = ignition::math::Vector3(0.0, 0.0, 0.0); // ignition::math::Vector3();
 
-      if (door_direction.compare(DIRECTION_SLIDE_LEFT) == 0) {
-        cmd_vel.x = -lin_x;
-        cmd_vel.y = -lin_y;
-      } else {
-        cmd_vel.x = lin_x;
-        cmd_vel.y = lin_y;
+      if (door_direction.compare(DIRECTION_SLIDE_LEFT) == 0)
+      {
+        this->cmd_vel.X() = -lin_x;
+        this->cmd_vel.Y() = -lin_y;
+      }
+      else
+      {
+        this->cmd_vel.X() = lin_x;
+        this->cmd_vel.Y() = lin_y;
       }
     }
 
-    void active_doors_cb(const std_msgs::UInt32MultiArray::ConstPtr& array) 
+    void active_doors_cb(const std_msgs::UInt32MultiArray::ConstPtr &array)
     {
       isActive = false;
-      
-      int i=0;
 
-      for (std::vector<uint32_t>::const_iterator it = array->data.begin(); it != array->data.end(); ++it) {
+      int i = 0;
+
+      for (std::vector<uint32_t>::const_iterator it = array->data.begin(); it != array->data.end(); ++it)
+      {
         activeDoors[i] = *it;
         i++;
 
-        if (*it == door_ref_num) {
+        if (*it == door_ref_num)
+        {
           isActive = true;
         }
       }
@@ -319,7 +378,7 @@ namespace gazebo
 
     std::string replaceSubstring(std::string &s, std::string toReplace, std::string replaceWith)
     {
-      return(s.replace(s.find(toReplace), toReplace.length(), replaceWith));
+      return (s.replace(s.find(toReplace), toReplace.length(), replaceWith));
     }
 
     // Deprecated function:
@@ -334,13 +393,13 @@ namespace gazebo
       std::istringstream ss(bot_pose_topics_str);
       std::string token;
 
-      while (std::getline(ss, token, ',')) {
+      while (std::getline(ss, token, ','))
+      {
         bot_pose_topic_list.push_back(token.c_str());
       }
 
       return bot_pose_topic_list;
     }
-
   };
 
   GZ_REGISTER_MODEL_PLUGIN(DoorPlugin)

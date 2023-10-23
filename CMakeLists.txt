@@ -1,14 +1,14 @@
-cmake_minimum_required(VERSION 2.8.3)
+cmake_minimum_required(VERSION 3.0.2)
 project(dynamic_gazebo_models)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17")
 
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
 include(FindProtobuf)
 find_package(catkin REQUIRED COMPONENTS roscpp nodelet tf gazebo_plugins gazebo_ros message_generation geometry_msgs)
-find_package(Boost 1.40 COMPONENTS program_options REQUIRED)
+find_package(Boost COMPONENTS program_options REQUIRED)
 find_package(Protobuf REQUIRED)
 
 #add services:
@@ -29,7 +29,13 @@ if (PKG_CONFIG_FOUND)
   pkg_check_modules(GAZEBO gazebo)
 endif()
 
-include_directories(${GAZEBO_INCLUDE_DIRS} ${catkin_INCLUDE_DIRS} ${Boost_INCLUDE_DIR} ${PROTOBUF_INCLUDE_DIR})
+include_directories(
+  ${GAZEBO_INCLUDE_DIRS} 
+  ${catkin_INCLUDE_DIRS} 
+  ${Boost_INCLUDE_DIR} 
+  ${PROTOBUF_INCLUDE_DIR}
+  /usr/include/
+  ) 
 
 #Controller Executables:
 add_executable(dynamics_manager src/controllers/dynamics_manager.cpp src/controllers/control_group.h)
